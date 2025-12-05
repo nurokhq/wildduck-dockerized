@@ -9,6 +9,9 @@ ident="zone-mta"
 #user="zonemta"
 #group="zonemta"
 
+[mtaSts]
+enabled = false
+
 [log]
 # Logging options
 # @include "log.toml"
