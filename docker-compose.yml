@@ -1,4 +1,3 @@
-version: "3.8"
 volumes:
   mongo:
   redis:
@@ -72,6 +71,7 @@ services:
 
   haraka:
     image: ghcr.io/zone-eu/haraka-plugin-wildduck:5.8.22
+    hostname: nurokmail.com
     restart: unless-stopped
     ports:
       - "25:25"
