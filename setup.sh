@@ -151,6 +151,32 @@ sed -i "s/name=\"example.com\"/name=\"$HOSTNAME\"/" ./config-generated/config-ge
 sed -i "s/hostname=\"email.example.com\"/hostname=\"$HOSTNAME\"/" ./config-generated/config-generated/zone-mta/plugins/wildduck.toml
 sed -i "s/rewriteDomain=\"email.example.com\"/rewriteDomain=\"$MAILDOMAIN\"/" ./config-generated/config-generated/zone-mta/plugins/wildduck.toml
 
+# Load .env file if it exists
+if [ -f .env ]; then
+    echo "Loading environment variables from .env file"
+    set -a
+    source .env
+    set +a
+fi
+
+# Configure nextMTA from environment variables if set
+DEFAULT_TOML="./config-generated/config-generated/zone-mta/zones/default.toml"
+if [ -n "$NEXTMTA_HOST" ] && [ -n "$NEXTMTA_PORT" ] && [ -n "$NEXTMTA_USER" ] && [ -n "$NEXTMTA_PASS" ]; then
+    echo "Configuring nextMTA from environment variables"
+    # Uncomment and set host (match commented line with any value)
+    sed -i "s|^#host = .*|host = \"$NEXTMTA_HOST\"|" "$DEFAULT_TOML"
+    # Uncomment and set port (match commented line with any number)
+    sed -i "s|^#port = .*|port = $NEXTMTA_PORT|" "$DEFAULT_TOML"
+    # Uncomment the [default.auth] section header
+    sed -i "s|^#\[default.auth\]|[default.auth]|" "$DEFAULT_TOML"
+    # Uncomment and set user (match commented line with any value)
+    sed -i "s|^#user = .*|user = \"$NEXTMTA_USER\"|" "$DEFAULT_TOML"
+    # Uncomment and set pass (match commented line with any value)
+    sed -i "s|^#pass = .*|pass = \"$NEXTMTA_PASS\"|" "$DEFAULT_TOML"
+else
+    echo "NextMTA configuration not found in .env file, skipping nextMTA setup"
+fi
+
 # Wildduck
 sed -i "s/hostname=\"email.example.com\"/hostname=\"$HOSTNAME\"/" ./config-generated/config-generated/wildduck/imap.toml
 sed -i "s/hostname=\"email.example.com\"/hostname=\"$HOSTNAME\"/" ./config-generated/config-generated/wildduck/pop3.toml
