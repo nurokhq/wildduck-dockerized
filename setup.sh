@@ -48,7 +48,27 @@ cp ./docker-compose.yml ./config-generated/docker-compose.yml
 echo "Copying Traefik config and replacing default configuration"
 cp -r ./dynamic_conf ./config-generated
 sed -i "s|\./config/|./config-generated/|g" ./config-generated/docker-compose.yml
+sed -i "s|api.HOSTNAME|api.$HOSTNAME|g" ./config-generated/docker-compose.yml
 sed -i "s|HOSTNAME|$HOSTNAME|g" ./config-generated/docker-compose.yml
+
+# API exposure configuration
+EXPOSE_API=false
+read -p "Do you wish to expose the API externally via Traefik (api.$HOSTNAME)? (y/N) " yn
+
+    case $yn in
+        [Yy]* ) EXPOSE_API=true;;
+        [Nn]* ) EXPOSE_API=false;;
+        * ) EXPOSE_API=false;;
+    esac
+
+if ! $EXPOSE_API; then
+    echo "Removing external API exposure - API will only be accessible internally"
+    # Remove all wildduck-api Traefik labels
+    sed -i "/traefik.http.routers.wildduck-api/d" ./config-generated/docker-compose.yml
+    sed -i "/traefik.http.services.wildduck-api/d" ./config-generated/docker-compose.yml
+else
+    echo "API will be exposed externally at https://api.$HOSTNAME"
+fi
 
 # Certs for traefik
 USE_SELF_SIGNED_CERTS=false
@@ -108,6 +128,11 @@ if ! $USE_SELF_SIGNED_CERTS; then
     # Uncomment the traefik.http.routers.wildduck-webmail.tls.certresolver line
     sed -i "s|# traefik.http.routers.wildduck-webmail.tls.certresolver: letsencrypt|traefik.http.routers.wildduck-webmail.tls.certresolver: letsencrypt|g" ./config-generated/docker-compose.yml
 
+    # Uncomment the traefik.http.routers.wildduck-api.tls.certresolver line (only if API is exposed)
+    if $EXPOSE_API; then
+        sed -i "s|# traefik.http.routers.wildduck-api.tls.certresolver: letsencrypt|traefik.http.routers.wildduck-api.tls.certresolver: letsencrypt|g" ./config-generated/docker-compose.yml
+    fi
+
     # Delete the traefik.tcp.routers.zonemta.tls: true line
     sed -i "/traefik.tcp.routers.zonemta.tls: true/d" ./config-generated/docker-compose.yml
 
@@ -119,6 +144,11 @@ if ! $USE_SELF_SIGNED_CERTS; then
 
     # Delete the traefik.http.routers.wildduck-webmail.tls: true line
     sed -i "/traefik.http.routers.wildduck-webmail.tls: true/d" ./config-generated/docker-compose.yml
+
+    # Delete the traefik.http.routers.wildduck-api.tls: true line (only if API is exposed)
+    if $EXPOSE_API; then
+        sed -i "/traefik.http.routers.wildduck-api.tls: true/d" ./config-generated/docker-compose.yml
+    fi
 
     sed -i "/- \.\/dynamic_conf:\/etc\/traefik\/dynamic_conf:ro/d" ./config-generated/docker-compose.yml
 
