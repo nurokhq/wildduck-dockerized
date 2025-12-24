@@ -219,8 +219,15 @@ echo "Generating secrets and placing them in $SERVICES configuration"
 SRS_SECRET=`head /dev/urandom | tr -dc A-Za-z0-9 | head -c30`
 ZONEMTA_SECRET=`head /dev/urandom | tr -dc A-Za-z0-9 | head -c30`
 DKIM_SECRET=`head /dev/urandom | tr -dc A-Za-z0-9 | head -c30`
-ACCESS_TOKEN=`head /dev/urandom | tr -dc A-Za-z0-9 | head -c30`
 HMAC_SECRET=`head /dev/urandom | tr -dc A-Za-z0-9 | head -c30`
+
+# Use ACCESS_TOKEN from .env if set, otherwise generate a random one
+if [ -z "$ACCESS_TOKEN" ]; then
+    ACCESS_TOKEN=`head /dev/urandom | tr -dc A-Za-z0-9 | head -c30`
+    echo "Generated random ACCESS_TOKEN: $ACCESS_TOKEN"
+else
+    echo "Using ACCESS_TOKEN from environment"
+fi
 
 # Zone-MTA
 sed -i "s/secret=\"super secret value\"/secret=\"$ZONEMTA_SECRET\"/" ./config-generated/config-generated/zone-mta/plugins/loop-breaker.toml
