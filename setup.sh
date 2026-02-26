@@ -207,6 +207,65 @@ else
     echo "NextMTA configuration not found in .env file, skipping nextMTA setup"
 fi
 
+# Configure external MongoDB from environment variables if set
+if [ -n "$MONGO_URL" ]; then
+    echo "Configuring external MongoDB from environment variables"
+    
+    # Escape special characters in MONGO_URL for sed
+    MONGO_URL_ESCAPED=$(echo "$MONGO_URL" | sed 's/[[\.*^$()+?{|]/\\&/g')
+    
+    # Update Wildduck dbs.toml
+    WILDDUCK_DBS="./config-generated/config-generated/wildduck/dbs.toml"
+    sed -i "s|mongo = \"mongodb://mongo:27017/wildduck\"|mongo = \"$MONGO_URL_ESCAPED\"|" "$WILDDUCK_DBS"
+    
+    # Update Zone-MTA dbs-production.toml
+    ZONEMTA_DBS_PROD="./config-generated/config-generated/zone-mta/dbs-production.toml"
+    sed -i "s|mongo = \"mongodb://mongo:27017/wildduck\"|mongo = \"$MONGO_URL_ESCAPED\"|" "$ZONEMTA_DBS_PROD"
+    
+    # Update Zone-MTA dbs-development.toml (extract database name from URL if needed)
+    ZONEMTA_DBS_DEV="./config-generated/config-generated/zone-mta/dbs-development.toml"
+    # Extract database name from MONGO_URL (default to wildduck if not specified)
+    MONGO_DB_NAME=$(echo "$MONGO_URL" | sed -n 's|.*/\([^?]*\).*|\1|p')
+    if [ -z "$MONGO_DB_NAME" ]; then
+        MONGO_DB_NAME="wildduck"
+    fi
+    # Replace the database name in the connection string for development
+    MONGO_URL_DEV=$(echo "$MONGO_URL" | sed "s|/[^/]*$|/$MONGO_DB_NAME|")
+    MONGO_URL_DEV_ESCAPED=$(echo "$MONGO_URL_DEV" | sed 's/[[\.*^$()+?{|]/\\&/g')
+    sed -i "s|mongo = \"mongodb://mongo:27017/zone-mta\"|mongo = \"$MONGO_URL_DEV_ESCAPED\"|" "$ZONEMTA_DBS_DEV"
+    
+    # Update Haraka wildduck.yaml
+    HARAKA_WILDDUCK="./config-generated/config-generated/haraka/wildduck.yaml"
+    sed -i "s|url: \"mongodb://mongo:27017/wildduck\"|url: \"$MONGO_URL_ESCAPED\"|" "$HARAKA_WILDDUCK"
+    
+    echo "External MongoDB configured: $MONGO_URL"
+    
+    # Remove mongo from depends_on in docker-compose.yml if using external MongoDB
+    DOCKER_COMPOSE="./config-generated/docker-compose.yml"
+    echo "Removing mongo service dependencies from docker-compose.yml"
+    
+    # Remove mongo from depends_on lists (keep redis)
+    # Handle different indentation levels
+    sed -i '/depends_on:/,/^  [a-z]/ { /^[[:space:]]*- mongo$/s/^/#/; }' "$DOCKER_COMPOSE"
+    
+    # Comment out the mongo service definition
+    # Find the mongo service block and comment it out
+    awk '
+    /^  mongo:/ { in_mongo=1 }
+    in_mongo && /^  [a-z]/ && !/^  mongo/ { in_mongo=0 }
+    in_mongo { print "#" $0; next }
+    { print }
+    ' "$DOCKER_COMPOSE" > "$DOCKER_COMPOSE.tmp" && mv "$DOCKER_COMPOSE.tmp" "$DOCKER_COMPOSE"
+    
+    # Comment out mongo volume
+    sed -i 's/^  mongo:$/#  mongo:  # Removed: using external MongoDB/' "$DOCKER_COMPOSE"
+    
+    echo "MongoDB service and dependencies removed from docker-compose.yml"
+    echo "Note: Please review docker-compose.yml and ensure mongo dependencies are properly removed"
+else
+    echo "MONGO_URL not set in .env file, using default MongoDB container"
+fi
+
 # Wildduck
 sed -i "s/hostname=\"email.example.com\"/hostname=\"$HOSTNAME\"/" ./config-generated/config-generated/wildduck/imap.toml
 sed -i "s/hostname=\"email.example.com\"/hostname=\"$HOSTNAME\"/" ./config-generated/config-generated/wildduck/pop3.toml
